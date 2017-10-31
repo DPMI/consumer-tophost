@@ -58,6 +58,7 @@ hosts::~hosts(){
   if(next!=0)
     delete next;
   next=0;
+  //  printf("[%s (removed)]", hostPair.c_str());
 }
 
 void hosts::Reset(void){
@@ -175,7 +176,8 @@ string hosts::print(void){
 
 string hosts::printMe(void){
   ostringstream oss;
-  oss << "[\"" << hostPair << "\" ," << pktCounter << "]";
+  //  oss << "[" << hostPair << " ," << pktCounter << "]";
+  oss << hostPair << " " << pktCounter; 
 
   string myString;
   myString = oss.str();

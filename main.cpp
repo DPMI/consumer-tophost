@@ -24,6 +24,7 @@ using namespace std;
 
 /* global state */
 static int running = 0;
+static int verbose = 0;
 static sqlite3* conn;
 static sqlite3_stmt* gethosts = NULL;
 static sqlite3_stmt* update = NULL;
@@ -31,6 +32,9 @@ static sqlite3_stmt* insert = NULL;
 
 static int sampleSize=0;
 static hosts* myHosts=0;
+
+static const char* program_name = NULL;
+static const char* iface = NULL;
 
 
 static struct option long_options[]= {
@@ -43,11 +47,11 @@ static struct option long_options[]= {
 
 void show_usage(const char* program_name){
 	printf("(C) 2011 david.sveningsson@bth.se\n");
-	printf("Usage: %s [OPTION].. -s INTERFACE SOURCE..\n", program_name);
+	printf("Usage: %s [OPTION].. -<s INTERFACE> SOURCE..\n", program_name);
 	printf("  -h, --help                  help (this text)\n");
-	printf("  -s, --manic=INTERFACE       MA Interface.\n");
-	printf("  -l, --listen=IP             listen ip [default: all]\n");
-	printf("  -p, --port=PORT             listen port [default: 8081]\n");
+	printf("  -s, --manic=INTERFACE       MA Interface.<optional>\n");
+	printf("  -l, --listen=IP             listen ip [default: all] <optional>\n");
+	printf("  -p, --port=PORT             listen port [default: 8081] <optional>\n");
 }
 
 /* called on SIGINT */
@@ -117,29 +121,21 @@ void push(int signum){
 		}
 	}
 
-
-
-
-
-
-
-
-
 	tmphost=myHosts;
 	tmphost2=myHosts;
 	tmphost3=myHosts;
 
 
 	depth=0;
-	ptr += sprintf(ptr, "[ ");
+	ptr += sprintf(ptr, "");
 	while(tmphost!=0 && depth<10){
-		ptr+=sprintf(ptr,"%s,", tmphost->printMe().c_str());
+		ptr+=sprintf(ptr,"%s \n", tmphost->printMe().c_str());
 		tmphost=tmphost->getNext();
 		depth++;
 	}
 	gettimeofday(&theTime2, NULL);
 
-	ptr += sprintf(ptr-1, "]"); /* -1 to remove last comma */
+	ptr += sprintf(ptr-1, ""); /* -1 to remove last comma */
 
 	sampleSize=0;
 	/*
@@ -150,8 +146,8 @@ void push(int signum){
 	*/
 	fprintf(stdout, "%s\n", buffer);
 
-	//	delete myHosts;
-	//myHosts=0;
+	delete myHosts;
+	myHosts=0;
 
 }
 
@@ -159,15 +155,33 @@ int main(int argc, char* argv[]){
 	int option_index = 0;
 	int op;
 	int ret;
+	verbose=0;
 
 	/* defaults */
 	const char* ip = "0.0.0.0";
 	int port = 8081;
 	const char* manic = NULL;
 
+	const char* separator = strrchr(argv[0], '/');
+	if ( separator ){
+	  program_name = separator + 1;
+	} else {
+	  program_name = argv[0];
+	}
+	
+
+	struct filter filter;
+	if ( filter_from_argv(&argc, argv, &filter) != 0 ){
+		return 0; /* error already shown */
+	}
+
 	/* parse arguments */
-	while ( (op = getopt_long(argc, argv, "hs:l:p:", long_options, &option_index)) != -1 )
+	while ( (op = getopt_long(argc, argv, "vhs:l:p:", long_options, &option_index)) != -1 )
 		switch (op){
+		case 'v': 
+		  verbose=1;
+		  break;
+
 		case 0: /* longopt with flag set */
 			break;
 
@@ -193,11 +207,11 @@ int main(int argc, char* argv[]){
 		}
 
 	/* missing manic */
+	/*
 	if ( !manic ){
-		fprintf(stderr, "Missing MAnic, see --help for usage.\n");
-		exit(1);
-	}
-
+	  fprintf(stderr, "Missing MAnic, see --help for usage.\n");
+	} 
+	*/
 	/* missing source */
 	if ( optind == argc ){
 		fprintf(stderr, "No source specified, see --help for usage.\n");
@@ -207,11 +221,25 @@ int main(int argc, char* argv[]){
 	/* open primary source */
 	struct stream* stream;
 	stream_addr_t src;
-	stream_addr_aton(&src, argv[optind++], STREAM_ADDR_GUESS, STREAM_ADDR_LOCAL);
+	
+	
+	if(verbose && filter.index>0) {
+	  filter_print(&filter, stderr, 0);
+	}
 
-	if( (ret=stream_open(&stream, &src, manic, 0)) != 0 ) {
-		fprintf(stderr, "stream_open failed with code 0x%08X: %s\n", ret, caputils_error_string(ret));
-		exit(1);
+	if (!manic) {
+
+	  stream_addr_aton(&src, argv[optind++], STREAM_ADDR_GUESS, STREAM_ADDR_LOCAL);
+	  
+	  if( (ret=stream_open(&stream, &src, manic, 0)) != 0 ) {
+	    fprintf(stderr, "stream_open failed with code 0x%08X: %s\n", ret, caputils_error_string(ret));
+	    exit(1);
+	  }	  
+	} else {
+	  if( (ret=stream_from_getopt(&stream, argv, optind, argc,iface,"-",program_name,0)) != 0 ) {
+	    fprintf(stderr, "stream_open failed with code 0x%08X: %s\n", ret, caputils_error_string(ret));
+	    exit(1);
+	  }
 	}
 
 	/* open secondary sources */
@@ -224,7 +252,10 @@ int main(int argc, char* argv[]){
 		}
 	}
 
-	/* initialize sqlite database */
+	if(verbose){
+	  fprintf(stderr,"Streams opened.\n");
+	}
+	  /* initialize sqlite database */
 	if ( (ret=sqlite3_open("host.db", &conn)) != SQLITE_OK ){
 		fprintf(stderr, "sqlite3_open() returned %d: %s\n", ret, sqlite3_errmsg(conn));
 		exit(1);
@@ -260,14 +291,21 @@ int main(int argc, char* argv[]){
 	signal(SIGINT, terminate);
 
 	/* timer */
-	{
-		struct itimerval difftime;
-		difftime.it_interval.tv_sec = 10;
-		difftime.it_interval.tv_usec = 0;
-		difftime.it_value.tv_sec = 10;
-		difftime.it_value.tv_usec = 0;
-		signal(SIGALRM, push);
-		setitimer(ITIMER_REAL, &difftime, NULL);
+	if (manic){
+	  if(verbose){
+	    fprintf(stderr," Reading from nic \n");
+	  }
+	  struct itimerval difftime;
+	  difftime.it_interval.tv_sec = 10;
+	  difftime.it_interval.tv_usec = 0;
+	  difftime.it_value.tv_sec = 10;
+	  difftime.it_value.tv_usec = 0;
+	  signal(SIGALRM, push);
+	  setitimer(ITIMER_REAL, &difftime, NULL);
+	} else {
+	  if(verbose){
+	    fprintf(stderr," Reading from file \n");
+	  }
 	}
 
 	/* ready to run */
@@ -284,18 +322,22 @@ int main(int argc, char* argv[]){
 	hosts* tmphost2;
 	int depth;
 	int maxDepth=0;
+	
+	
 
 	while ( running ){
 		struct timeval timeout = {1,0};
 		sampleSize++;
 		stret = stream_read(stream, &cp, NULL, &timeout);
 		if ( stret == EAGAIN || stret == EINTR ){
-			continue;
+		  continue;
 		} else if ( stret != 0 ){
-			fprintf(stderr, "ERRNO = %s .\n", strerror(stret));
-			break;
+		  if(manic){
+		    fprintf(stderr, "ERRNO = %s .\n", strerror(stret));
+		  }
+		  break;
 		}
-
+		
 		const struct ip* ip = find_ipv4_header(cp->ethhdr,0);
 		if ( !ip ){
 			continue;
@@ -304,7 +346,8 @@ int main(int argc, char* argv[]){
 		inet_ntop(AF_INET, &(ip->ip_dst), stripdst, INET_ADDRSTRLEN);
 		pkt1=(qd_real)(double)cp->ts.tv_sec+(qd_real)(double)(cp->ts.tv_psec/PICODIVIDER);
 
-		snprintf(strstream,500,"%s - %d - %s",stripsrc,ip->ip_p,stripdst);
+		//		snprintf(strstream,500,"%s - %d - %s",stripsrc,ip->ip_p,stripdst);
+		snprintf(strstream,500,"%s ",stripsrc);
 
 		query.assign(strstream);
 
@@ -342,9 +385,14 @@ int main(int argc, char* argv[]){
 
 	}
 
-	if ( !(stret == 0 || stret == EAGAIN) ){
-		fprintf(stderr, "stream_read() returned 0x%08x: %s\n", ret, caputils_error_string(ret));
+	if(manic && verbose){
+	  if ( !(stret == 0 || stret == EAGAIN) ){
+	    fprintf(stderr, "stream_read() returned 0x%08x: %s\n", ret, caputils_error_string(ret));
+	  }
 	}
+
+	/* print when leaving */
+	push(1);
 
 	sqlite3_finalize(gethosts);
 	sqlite3_finalize(insert);
