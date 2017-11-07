@@ -1,6 +1,4 @@
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <caputils/caputils.h>
 #include <caputils/packet.h>
@@ -42,16 +40,25 @@ static struct option long_options[]= {
 	{"manic", required_argument, NULL, 's'},
 	{"listen", required_argument, 0, 'l'},
 	{"port", required_argument, 0, 'p'},
+
 	{0, 0, 0, 0} /* sentinel */
 };
 
 void show_usage(const char* program_name){
-	printf("(C) 2011 david.sveningsson@bth.se\n");
-	printf("Usage: %s [OPTION].. -<s INTERFACE> SOURCE..\n", program_name);
+  printf("%s-%s (libcap_utils-%s)\n", program_name, VERSION,caputils_version(NULL));
+	printf("Usage: %s [OPTION].. -<s INTERFACE> SOURCE..\n\n", program_name);
+	printf(" Runs in two modes; live (manic) or from file. \n");
+	printf(" Live mode; \n");
+	printf(" %s [OPTIONS] -s <MANIC> <stream1> ... <streamN> \n",program_name);
+	printf(" File mode; \n");
+	printf(" %s [OPTIONS] <filename> \n\n", program_name);
+	printf(" Options \n");
 	printf("  -h, --help                  help (this text)\n");
 	printf("  -s, --manic=INTERFACE       MA Interface.<optional>\n");
 	printf("  -l, --listen=IP             listen ip [default: all] <optional>\n");
 	printf("  -p, --port=PORT             listen port [default: 8081] <optional>\n");
+	printf("  -v, --verbose               verbose\n");
+
 }
 
 /* called on SIGINT */
@@ -206,17 +213,18 @@ int main(int argc, char* argv[]){
 			break;
 		}
 
-	/* missing manic */
-	/*
-	if ( !manic ){
-	  fprintf(stderr, "Missing MAnic, see --help for usage.\n");
-	} 
-	*/
 	/* missing source */
 	if ( optind == argc ){
 		fprintf(stderr, "No source specified, see --help for usage.\n");
 		exit(1);
 	}
+
+	/* missing manic */	
+	if ( !manic  && verbose ){
+	  fprintf(stderr, "Missing MAnic, see --help for usage.\n");
+	} 
+	
+
 
 	/* open primary source */
 	struct stream* stream;
