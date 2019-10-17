@@ -176,8 +176,40 @@ string hosts::print(void){
 
 string hosts::printMe(void){
   ostringstream oss;
+
+  struct sockaddr_in sa;
+  char node[NI_MAXHOST];
+  char hostString[16];
+
+  
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  
+  strcpy(hostString,hostPair.c_str());
+  int eostr=strlen(hostString);
+  inet_pton(AF_INET, hostString, &sa.sin_addr);
+
+ int res = getnameinfo((struct sockaddr*)&sa, sizeof(sa),
+                          node, sizeof(node),
+                          NULL, 0, NI_NAMEREQD);
+
+ string nodename;
+ if(res) {
+   /*
+   printf("**%s**\n", hostString);
+   printf("len= %d \n", strlen(hostString));
+   printf("error: %d\n", res);
+   printf("%s\n", gai_strerror(res));
+   */
+   nodename="N/A";
+ } else {
+   nodename=node;
+ }
+ 
+ 
+ 
   //  oss << "[" << hostPair << " ," << pktCounter << "]";
-  oss << hostPair << " " << pktCounter; 
+ oss << nodename << " " << hostPair << " " << pktCounter; 
 
   string myString;
   myString = oss.str();

@@ -21,6 +21,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <qd/qd_real.h>
 #include <stdio.h>

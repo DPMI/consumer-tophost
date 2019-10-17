@@ -235,17 +235,18 @@ int main(int argc, char* argv[]){
 	  filter_print(&filter, stderr, 0);
 	}
 
+	fprintf(stderr, "opening streams\n");
 	if (!manic) {
 
 	  stream_addr_aton(&src, argv[optind++], STREAM_ADDR_GUESS, STREAM_ADDR_LOCAL);
 	  
 	  if( (ret=stream_open(&stream, &src, manic, 0)) != 0 ) {
-	    fprintf(stderr, "stream_open failed with code 0x%08X: %s\n", ret, caputils_error_string(ret));
+	    fprintf(stderr, "stream_open failed(%s) with code 0x%08X: %s\n", src, ret, caputils_error_string(ret));
 	    exit(1);
 	  }	  
 	} else {
-	  if( (ret=stream_from_getopt(&stream, argv, optind, argc,iface,"-",program_name,0)) != 0 ) {
-	    fprintf(stderr, "stream_open failed with code 0x%08X: %s\n", ret, caputils_error_string(ret));
+	  if( (ret=stream_from_getopt(&stream, argv, optind, argc,manic,"-",program_name,0)) != 0 ) {
+	    fprintf(stderr, "stream_open failed(%s) with code 0x%08X: %s\n", argv,ret, caputils_error_string(ret));
 	    exit(1);
 	  }
 	}
@@ -355,7 +356,7 @@ int main(int argc, char* argv[]){
 		pkt1=(qd_real)(double)cp->ts.tv_sec+(qd_real)(double)(cp->ts.tv_psec/PICODIVIDER);
 
 		//		snprintf(strstream,500,"%s - %d - %s",stripsrc,ip->ip_p,stripdst);
-		snprintf(strstream,500,"%s ",stripsrc);
+		snprintf(strstream,500,"%s",stripsrc);
 
 		query.assign(strstream);
 
